@@ -43,10 +43,10 @@ class PollutantPredModel_LSTM(nn.Module):
         return lstm_out, hn,  cn, output
 
     def h0(self):
-        return torch.randn((1, self.batch, self.num_hidden))
+        return torch.zeros((1, self.batch, self.num_hidden))
 
     def c0(self):
-        return torch.randn((1, self.batch, self.num_hidden))
+        return torch.zeros((1, self.batch, self.num_hidden))
 
 class PollutantPredModel_BP(nn.Module):
     def __init__(self, input_channel=22, output_channel=6):
