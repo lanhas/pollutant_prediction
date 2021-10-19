@@ -4,20 +4,22 @@ import torch.nn as nn
 import numpy as np
 from network import PollutantPredModel_BP, PollutantPredModel_LSTM
 from torch.utils.data import DataLoader
-from dataloader import PollutionDataset
+from dataloader import get_dataset
 from torch import optim
 from visdom import Visdom
 
 # 超参数设置
-arch_type = 'lstm'
-epochs = 600
-lr = 1e-4
-batch_size = 128
-lstm_batch = 14
-time_step = 24 * 3
+arch_type = 'bp'
+epochs = 200
+lr = 1e-5
+batch_size = 256
+lstm_batch = 24
+
 
 input_features = 27
 output_features = 6
+train_rate = 0.8
+seq_len = 24 * 3
 
 vis_port = 12370
 vis_env = 'main'
@@ -29,17 +31,16 @@ elif arch_type == 'lstm':
     net = PollutantPredModel_LSTM(input_features, output_features, lstm_batch).to(device)
 opt = optim.SGD(net.parameters(),lr=lr,momentum=0.9)
 
-data_path = 'data.xlsx'
+data_path = 'data/data.xlsx'
 enable_vis = True
+train_dst, val_dst = get_dataset(data_path, arch_type=arch_type, train_rate=train_rate, seq_len=seq_len)
 
-train_dst = PollutionDataset(data_path, arch_type=arch_type, time_step=time_step, train=True, test_size=0.2)
-test_dst = PollutionDataset(data_path, arch_type=arch_type, time_step=time_step, train=False, test_size=0.2)
 if arch_type == 'bp':
-    trainLoader = DataLoader(dataset=train_dst, batch_size=batch_size, shuffle=True)
-    valLoader = DataLoader(dataset=test_dst, batch_size=batch_size, shuffle=True)
+    trainLoader = DataLoader(dataset=train_dst, batch_size=batch_size, shuffle=True, drop_last = True)
+    valLoader = DataLoader(dataset=val_dst, batch_size=batch_size, shuffle=True, drop_last = True)
 if arch_type == 'lstm':
     trainLoader = DataLoader(dataset=train_dst, batch_size=lstm_batch, shuffle=True, drop_last = True)
-    valLoader = DataLoader(dataset=test_dst, batch_size=lstm_batch, shuffle=True, drop_last = True)
+    valLoader = DataLoader(dataset=val_dst, batch_size=lstm_batch, shuffle=True, drop_last = True)
 
 # 可视化设置
 vis = Visdom(port=12370) if enable_vis else None
@@ -66,7 +67,7 @@ def train():
             print("Epoch:{}".format(epoch))
             print("train loss: {}".format(loss_train))
             print("val loss: {}".format(loss_val))
-        if loss_val < best_loss and epoch > 400:
+        if loss_val < best_loss and epoch > 50:
             best_loss = loss_val
             torch.save(net.state_dict(), 'checkpoints/Net_{}_Epopch{}-loss{}.pth'.format(arch_type,epoch, loss_val))
         vis.line(np.column_stack((loss_train, loss_val)), [epoch], win='train_log', update='append', opts=dict(title='losses', legend=name))
@@ -111,7 +112,7 @@ def run_epoch(arch_type, epoch):
     return loss_trained, loss_val
 
 def SGDlr(epoch, a1=lr, B=epochs):
-    C = 400
+    C = 200
     rest = epoch % B
     if rest < 0.5 * C:
         return a1
